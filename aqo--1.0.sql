@@ -65,3 +65,51 @@ CREATE FUNCTION invalidate_deactivated_queries_cache() RETURNS trigger
 CREATE TRIGGER aqo_queries_invalidate AFTER UPDATE OR DELETE OR TRUNCATE
 	ON aqo_queries FOR EACH STATEMENT
 	EXECUTE PROCEDURE invalidate_deactivated_queries_cache();
+
+CREATE UNLOGGED TABLE aqo_queries_updates (
+	query_hash		int NOT NULL,
+	learn_aqo		boolean NOT NULL,
+	use_aqo			boolean NOT NULL,
+	fspace_hash		int NOT NULL,
+	auto_tuning		boolean NOT NULL
+);
+
+CREATE UNLOGGED TABLE aqo_query_texts_updates (
+	query_hash		int NOT NULL,
+	query_text		varchar NOT NULL
+);
+
+CREATE UNLOGGED TABLE aqo_query_stat_updates (
+	query_hash		int NOT NULL,
+	execution_time_with_aqo					double precision[],
+	execution_time_without_aqo				double precision[],
+	planning_time_with_aqo					double precision[],
+	planning_time_without_aqo				double precision[],
+	cardinality_error_with_aqo				double precision[],
+	cardinality_error_without_aqo			double precision[],
+	executions_with_aqo						bigint,
+	executions_without_aqo					bigint
+);
+
+CREATE UNLOGGED TABLE aqo_data_updates (
+	fspace_hash		int NOT NULL,
+	fsspace_hash	int NOT NULL,
+	nfeatures		int NOT NULL,
+	features		double precision[][],
+	targets			double precision[]
+);
+
+ALTER TABLE aqo_data_updates ALTER COLUMN features SET STORAGE MAIN;
+ALTER TABLE aqo_data_updates ALTER COLUMN targets SET STORAGE MAIN;
+ALTER TABLE aqo_query_stat_updates
+ALTER COLUMN execution_time_with_aqo SET STORAGE MAIN;
+ALTER TABLE aqo_query_stat_updates
+ALTER COLUMN execution_time_without_aqo SET STORAGE MAIN;
+ALTER TABLE aqo_query_stat_updates
+ALTER COLUMN planning_time_with_aqo SET STORAGE MAIN;
+ALTER TABLE aqo_query_stat_updates
+ALTER COLUMN planning_time_without_aqo SET STORAGE MAIN;
+ALTER TABLE aqo_query_stat_updates
+ALTER COLUMN cardinality_error_without_aqo SET STORAGE MAIN;
+ALTER TABLE aqo_query_stat_updates
+ALTER COLUMN cardinality_error_with_aqo SET STORAGE MAIN;

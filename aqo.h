@@ -116,6 +116,8 @@
 #include "postgres.h"
 
 #include "fmgr.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
 
 #include "access/hash.h"
 #include "access/htup_details.h"
@@ -136,6 +138,9 @@
 #include "optimizer/cost.h"
 #include "parser/analyze.h"
 #include "parser/parsetree.h"
+#include "postmaster/bgworker.h"
+#include "storage/ipc.h"
+#include "storage/latch.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -165,7 +170,13 @@ typedef enum
 	/* Aqo is disabled for all queries */
 	AQO_MODE_DISABLED,
 }	AQO_MODE;
+
+/* GUC variables */
 extern int	aqo_mode;
+extern int	worker_aqo_naptime;
+extern char *aqo_database;
+extern char *aqo_conninfo;
+
 
 typedef struct
 {
@@ -271,8 +282,8 @@ PlannedStmt *aqo_planner(Query *parse,
 			int cursorOptions,
 			ParamListInfo boundParams);
 void print_into_explain(PlannedStmt *plannedstmt, IntoClause *into,
-			   ExplainState *es, const char *queryString,
-			   ParamListInfo params, const instr_time *planduration);
+				   ExplainState *es, const char *queryString,
+				   ParamListInfo params, const instr_time *planduration);
 void		disable_aqo_for_query(void);
 
 /* Cardinality estimation hooks */
@@ -329,7 +340,12 @@ int *argsort(void *a, int n, size_t es,
 		int (*cmp) (const void *, const void *));
 int		   *inverse_permutation(int *a, int n);
 QueryStat  *palloc_query_stat(void);
-void		pfree_query_stat(QueryStat *stat);
+void		pfree_query_stat(QueryStat * stat);
+void		deform_matrix(Datum datum, double **matrix);
+void		deform_vector(Datum datum, double *vector, int *nelems);
+ArrayType  *form_matrix(double **matrix, int nrows, int ncols);
+ArrayType  *form_vector(double *vector, int nrows);
+
 
 /* Selectivity cache for parametrized baserels */
 void cache_selectivity(int clause_hash,
@@ -338,5 +354,9 @@ void cache_selectivity(int clause_hash,
 				  double selectivity);
 double	   *selectivity_cache_find_global_relid(int clause_hash, int global_relid);
 void		selectivity_cache_clear(void);
+
+/* Background worker */
+void		start_background_worker(void);
+void		background_worker_main(Datum arg);
 
 #endif

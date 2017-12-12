@@ -117,3 +117,102 @@ pfree_query_stat(QueryStat * stat)
 	pfree(stat->cardinality_error_without_aqo);
 	pfree(stat);
 }
+
+/*
+ * Expands matrix from storage into simple C-array.
+ */
+void
+deform_matrix(Datum datum, double **matrix)
+{
+	ArrayType  *array = DatumGetArrayTypePCopy(datum);
+	int			nelems;
+	Datum	   *values;
+	int			rows;
+	int			cols;
+	int			i,
+				j;
+
+	deconstruct_array(array,
+					  FLOAT8OID, 8, FLOAT8PASSBYVAL, 'd',
+					  &values, NULL, &nelems);
+	rows = ARR_DIMS(array)[0];
+	cols = ARR_DIMS(array)[1];
+	for (i = 0; i < rows; ++i)
+		for (j = 0; j < cols; ++j)
+			matrix[i][j] = DatumGetFloat8(values[i * cols + j]);
+	pfree(values);
+	pfree(array);
+}
+
+/*
+ * Expands vector from storage into simple C-array.
+ * Also returns its number of elements.
+ */
+void
+deform_vector(Datum datum, double *vector, int *nelems)
+{
+	ArrayType  *array = DatumGetArrayTypePCopy(datum);
+	Datum	   *values;
+	int			i;
+	int			my_nelems;
+
+	if (nelems == NULL)
+		nelems = &my_nelems;
+
+	deconstruct_array(array,
+					  FLOAT8OID, 8, FLOAT8PASSBYVAL, 'd',
+					  &values, NULL, nelems);
+	for (i = 0; i < *nelems; ++i)
+		vector[i] = DatumGetFloat8(values[i]);
+	pfree(values);
+	pfree(array);
+}
+
+/*
+ * Forms ArrayType object for storage from simple C-array matrix.
+ */
+ArrayType *
+form_matrix(double **matrix, int nrows, int ncols)
+{
+	Datum	   *elems;
+	ArrayType  *array;
+	int			dims[2];
+	int			lbs[2];
+	int			i,
+				j;
+
+	dims[0] = nrows;
+	dims[1] = ncols;
+	lbs[0] = lbs[1] = 1;
+	elems = palloc(sizeof(*elems) * nrows * ncols);
+	for (i = 0; i < nrows; ++i)
+		for (j = 0; j < ncols; ++j)
+			elems[i * ncols + j] = Float8GetDatum(matrix[i][j]);
+	array = construct_md_array(elems, NULL, 2, dims, lbs,
+							   FLOAT8OID, 8, FLOAT8PASSBYVAL, 'd');
+	pfree(elems);
+	return array;
+}
+
+/*
+ * Forms ArrayType object for storage from simple C-array vector.
+ */
+ArrayType *
+form_vector(double *vector, int nrows)
+{
+	Datum	   *elems;
+	ArrayType  *array;
+	int			dims[1];
+	int			lbs[1];
+	int			i;
+
+	dims[0] = nrows;
+	lbs[0] = 1;
+	elems = palloc(sizeof(*elems) * nrows);
+	for (i = 0; i < nrows; ++i)
+		elems[i] = Float8GetDatum(vector[i]);
+	array = construct_md_array(elems, NULL, 1, dims, lbs,
+							   FLOAT8OID, 8, FLOAT8PASSBYVAL, 'd');
+	pfree(elems);
+	return array;
+}

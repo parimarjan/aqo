@@ -5,9 +5,6 @@ PG_MODULE_MAGIC;
 void		_PG_init(void);
 void		_PG_fini(void);
 
-/* Strategy of determining feature space for new queries. */
-int			aqo_mode;
-
 /* GUC variables */
 static const struct config_enum_entry format_options[] = {
 	{"intelligent", AQO_MODE_INTELLIGENT, false},
@@ -17,6 +14,19 @@ static const struct config_enum_entry format_options[] = {
 	{"disabled", AQO_MODE_DISABLED, false},
 	{NULL, 0, false}
 };
+
+/* Strategy of determining feature space for new queries. */
+int			aqo_mode;
+
+/* Time in milliseconds for make updates with background worker */
+int			worker_aqo_naptime;
+
+/* The database on which aqo background worker could be run */
+char	   *aqo_database;
+
+/* Master database connection information (in the case of replication) */
+char	   *aqo_conninfo;
+
 
 /* Parameters of autotuning */
 int			aqo_stat_size = 20;
@@ -71,6 +81,49 @@ ExplainOnePlan_hook_type prev_ExplainOnePlan_hook;
 void
 _PG_init(void)
 {
+	if (!process_shared_preload_libraries_in_progress)
+	{
+		elog(ERROR, "aqo module must be initialized by Postmaster. "
+			 "Put the following line to configuration file: "
+			 "shared_preload_libraries='aqo'");
+	}
+
+	DefineCustomIntVariable("aqo.worker_naptime",
+							"Sleep time in milliseconds for AQO worker",
+							NULL,
+							&worker_aqo_naptime,
+							500,
+							0,
+							30000,
+							PGC_SUSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
+	DefineCustomStringVariable(
+							   "aqo.database",
+							   "On which database aqo could be run",
+							   NULL,
+							   &aqo_database,
+							   "postgres",
+							   PGC_SIGHUP,
+							   0,
+							   NULL,
+							   NULL,
+							   NULL
+		);
+	DefineCustomStringVariable(
+							   "aqo.conninfo",
+	   "Master database connection information (in the case of replication)",
+							   NULL,
+							   &aqo_conninfo,
+							   "",
+							   PGC_SIGHUP,
+							   0,
+							   NULL,
+							   NULL,
+							   NULL
+		);
 	DefineCustomEnumVariable("aqo.mode",
 							 "Mode of aqo usage.",
 							 NULL,
@@ -108,6 +161,8 @@ _PG_init(void)
 	prev_ExplainOnePlan_hook = ExplainOnePlan_hook;
 	ExplainOnePlan_hook = print_into_explain;
 	init_deactivated_queries_storage();
+
+	start_background_worker();
 }
 
 void

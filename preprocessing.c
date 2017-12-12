@@ -220,13 +220,14 @@ aqo_planner(Query *parse,
 /*
  * Prints if the plan was constructed with AQO.
  */
-void print_into_explain(PlannedStmt *plannedstmt, IntoClause *into,
-			   ExplainState *es, const char *queryString,
-			   ParamListInfo params, const instr_time *planduration)
+void
+print_into_explain(PlannedStmt *plannedstmt, IntoClause *into,
+				   ExplainState *es, const char *queryString,
+				   ParamListInfo params, const instr_time *planduration)
 {
 	if (prev_ExplainOnePlan_hook)
 		prev_ExplainOnePlan_hook(plannedstmt, into, es, queryString,
-								params, planduration);
+								 params, planduration);
 	if (explain_aqo)
 	{
 		ExplainPropertyBool("Using aqo", true, es);
