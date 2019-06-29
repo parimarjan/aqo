@@ -1,5 +1,5 @@
 diff --git a/src/backend/commands/explain.c b/src/backend/commands/explain.c
-index 92969636b7..42446d4e93 100644
+index 92969636b7..38e737cfe0 100644
 --- a/src/backend/commands/explain.c
 +++ b/src/backend/commands/explain.c
 @@ -46,6 +46,9 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
@@ -22,11 +22,11 @@ index 92969636b7..42446d4e93 100644
 +
  	ExplainCloseGroup("Query", NULL, true, es);
  }
-
+ 
 @@ -1041,6 +1048,17 @@ ExplainPreScanNode(PlanState *planstate, Bitmapset **rels_used)
-	return planstate_tree_walker(planstate, ExplainPreScanNode, rels_used);
+ 	return planstate_tree_walker(planstate, ExplainPreScanNode, rels_used);
  }
-
+ 
 +static bool
 +we_need_to_sum_tuples(const Plan *plan)
 +{
@@ -41,18 +41,28 @@ index 92969636b7..42446d4e93 100644
  /*
   * ExplainNode -
   *	  Appends a description of a plan tree to es->str
-@@ -1523,6 +1541,24 @@ ExplainNode(PlanState *planstate, List *ancestors,
+@@ -1523,6 +1541,34 @@ ExplainNode(PlanState *planstate, List *ancestors,
  				appendStringInfo(es->str,
  								 " (actual rows=%.0f loops=%.0f)",
  								 rows, nloops);
++
 +#ifdef AQO_EXPLAIN
-+			if (es->verbose && plan)
++			if (es->verbose && plan && planstate->instrument)
 +			{
 +				int wrkrs = 1;
 +				double error = -1.;
 +
 +				if (planstate->worker_instrument && we_need_to_sum_tuples(plan))
-+					wrkrs += planstate->worker_instrument->num_workers;
++				{
++					int i;
++					for (i = 0; i < planstate->worker_instrument->num_workers; i++)
++					{
++						Instrumentation *instrument = &planstate->worker_instrument->instrument[i];
++						if (instrument->nloops <= 0)
++							continue;
++						wrkrs++;
++					}
++				}
 +
 +				if (plan->predicted_cardinality > 0.)
 +				{

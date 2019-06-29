@@ -210,8 +210,9 @@ static bool
 learnOnPlanState(PlanState *p, void *context)
 {
 	aqo_obj_stat *ctx = (aqo_obj_stat *) context;
+	aqo_obj_stat SubplanCtx = {NIL, NIL, NIL};
 
-	planstate_tree_walker(p, learnOnPlanState, context);
+	planstate_tree_walker(p, learnOnPlanState, (void *) &SubplanCtx);
 
 	/*
 	 * Some nodes inserts after planning step (See T_Hash node type).
@@ -225,9 +226,11 @@ learnOnPlanState(PlanState *p, void *context)
 												  p->plan->path_relids,
 												  p->plan->path_jointype,
 												  p->plan->was_parametrized);
-		ctx->selectivities = list_concat(ctx->selectivities, cur_selectivities);
-		ctx->clauselist = list_concat(ctx->clauselist,
+		SubplanCtx.selectivities = list_concat(SubplanCtx.selectivities,
+															cur_selectivities);
+		SubplanCtx.clauselist = list_concat(SubplanCtx.clauselist,
 											list_copy(p->plan->path_clauses));
+
 		if (p->plan->path_relids != NIL)
 			/*
 			 * This plan can be stored as cached plan. In the case we will have
@@ -256,6 +259,10 @@ learnOnPlanState(PlanState *p, void *context)
 					{
 						double t = p->worker_instrument->instrument[i].ntuples;
 						double l = p->worker_instrument->instrument[i].nloops;
+
+						if (l <= 0)
+							continue;
+
 						wntuples += t;
 						wnloops += l;
 						learn_rows += t/l;
@@ -301,9 +308,13 @@ learnOnPlanState(PlanState *p, void *context)
 			 * than a subtree will never be visited.
 			 */
 			if (!(p->instrument->ntuples <= 0. && p->instrument->nloops <= 0.))
-				learn_sample(ctx->clauselist, ctx->selectivities,
-										ctx->relidslist, learn_rows, predicted);
+				learn_sample(SubplanCtx.clauselist, SubplanCtx.selectivities,
+								p->plan->path_relids, learn_rows, predicted);
 		}
+
+		ctx->clauselist = list_concat(ctx->clauselist, SubplanCtx.clauselist);
+		ctx->selectivities = list_concat(ctx->selectivities,
+													SubplanCtx.selectivities);
 	}
 
 	return false;
@@ -429,6 +440,9 @@ aqo_ExecutorEnd(QueryDesc *queryDesc)
 		cardinality_num_objects = 0;
 
 		learnOnPlanState(queryDesc->planstate, (void *) &ctx);
+		list_free(ctx.clauselist);
+		list_free(ctx.relidslist);
+		list_free(ctx.selectivities);
 	}
 
 	if (query_context.collect_stat)
