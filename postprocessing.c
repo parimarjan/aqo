@@ -311,11 +311,11 @@ learnOnPlanState(PlanState *p, void *context)
 				learn_sample(SubplanCtx.clauselist, SubplanCtx.selectivities,
 								p->plan->path_relids, learn_rows, predicted);
 		}
-
-		ctx->clauselist = list_concat(ctx->clauselist, SubplanCtx.clauselist);
-		ctx->selectivities = list_concat(ctx->selectivities,
-													SubplanCtx.selectivities);
 	}
+
+	ctx->clauselist = list_concat(ctx->clauselist, SubplanCtx.clauselist);
+	ctx->selectivities = list_concat(ctx->selectivities,
+													SubplanCtx.selectivities);
 
 	return false;
 }
