@@ -1,5 +1,30 @@
+diff --git a/src/backend/commands/analyze.c b/src/backend/commands/analyze.c
+index 6cb545c126..d7004e5313 100644
+--- a/src/backend/commands/analyze.c
++++ b/src/backend/commands/analyze.c
+@@ -1048,13 +1048,13 @@ acquire_sample_rows(Relation onerel, int elevel,
+ 			 * The first targrows sample rows are simply copied into the
+ 			 * reservoir. Then we start replacing tuples in the sample until
+ 			 * we reach the end of the relation.  This algorithm is from Jeff
+-			 * Vitter's paper (see full citation below). It works by
+-			 * repeatedly computing the number of tuples to skip before
+-			 * selecting a tuple, which replaces a randomly chosen element of
+-			 * the reservoir (current set of tuples).  At all times the
+-			 * reservoir is a true random sample of the tuples we've passed
+-			 * over so far, so when we fall off the end of the relation we're
+-			 * done.
++			 * Vitter's paper (see full citation in utils/misc/sampling.c). It
++			 * works by repeatedly computing the number of tuples to skip
++			 * before selecting a tuple, which replaces a randomly chosen
++			 * element of the reservoir (current set of tuples).  At all times
++			 * the reservoir is a true random sample of the tuples we've
++			 * passed over so far, so when we fall off the end of the relation
++			 * we're done.
+ 			 */
+ 			if (numrows < targrows)
+ 				rows[numrows++] = ExecCopySlotHeapTuple(slot);
 diff --git a/src/backend/commands/explain.c b/src/backend/commands/explain.c
-index 92969636b7..a8824919ed 100644
+index 92969636b7..442480bb90 100644
 --- a/src/backend/commands/explain.c
 +++ b/src/backend/commands/explain.c
 @@ -46,6 +46,9 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
@@ -85,7 +110,7 @@ index 92969636b7..a8824919ed 100644
  	{
  		if (es->format == EXPLAIN_FORMAT_TEXT)
 -			appendStringInfoString(es->str, " (never executed)");
-+			appendStringInfo(es->str, " (never executed, predicted=%lf, fss=%d)", plan->predicted_cardinality, plan->fss_hash);
++			appendStringInfo(es->str, " (never executed, predicted=%lf, fss=%d, [%lf, %lf])", plan->predicted_cardinality, plan->fss_hash, planstate->instrument->ntuples, planstate->instrument->nloops);
  		else
  		{
  			if (es->timing)
