@@ -1,5 +1,5 @@
 diff --git a/src/backend/commands/explain.c b/src/backend/commands/explain.c
-index 92969636b7..38e737cfe0 100644
+index 92969636b7..a8824919ed 100644
 --- a/src/backend/commands/explain.c
 +++ b/src/backend/commands/explain.c
 @@ -46,6 +46,9 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
@@ -41,7 +41,7 @@ index 92969636b7..38e737cfe0 100644
  /*
   * ExplainNode -
   *	  Appends a description of a plan tree to es->str
-@@ -1523,6 +1541,34 @@ ExplainNode(PlanState *planstate, List *ancestors,
+@@ -1523,6 +1541,38 @@ ExplainNode(PlanState *planstate, List *ancestors,
  				appendStringInfo(es->str,
  								 " (actual rows=%.0f loops=%.0f)",
  								 rows, nloops);
@@ -68,14 +68,27 @@ index 92969636b7..38e737cfe0 100644
 +				{
 +					error = 100. * (plan->predicted_cardinality-(rows*wrkrs)) / (rows * wrkrs);
 +					appendStringInfo(es->str,
-+							" (AQO predicted: cardinality=%.0lf, error=%.0lf%%, fss=%d)",
-+							plan->predicted_cardinality, error, plan->fss_hash);
++							" (AQO predicted: cardinality=%lf, error=%.0lf%%, fss=%d, wrkrs=%d, wrkrsHasInstr=%hhu, rows=%lf)",
++							plan->predicted_cardinality, error, plan->fss_hash, wrkrs, planstate->worker_instrument != NULL, rows);
 +				}
++				else
++					appendStringInfo(es->str,
++												" (Bogus AQO: cardinality=%.0lf, fss=%d)",
++												plan->predicted_cardinality, plan->fss_hash);
 +			}
 +#endif
  		}
  		else
  		{
+@@ -1540,7 +1590,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
+ 	else if (es->analyze)
+ 	{
+ 		if (es->format == EXPLAIN_FORMAT_TEXT)
+-			appendStringInfoString(es->str, " (never executed)");
++			appendStringInfo(es->str, " (never executed, predicted=%lf, fss=%d)", plan->predicted_cardinality, plan->fss_hash);
+ 		else
+ 		{
+ 			if (es->timing)
 diff --git a/src/backend/nodes/copyfuncs.c b/src/backend/nodes/copyfuncs.c
 index 78deade89b..b1470147e9 100644
 --- a/src/backend/nodes/copyfuncs.c

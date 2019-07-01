@@ -296,7 +296,8 @@ aqo_set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 
 	predicted = predict_for_relation(allclauses, selectivities, relids, &fss);
 	rel->fss_hash = fss;
-
+	if (fss == -595752390 || fss == 1030038296 || fss == -1958289071)
+elog(INFO, "Predict for JOIN: predicted=%lf, fss=%d", predicted, fss);
 	if (predicted >= 0)
 	{
 		rel->predicted_cardinality = predicted;
@@ -366,7 +367,7 @@ aqo_get_parameterized_joinrel_size(PlannerInfo *root,
 
 	predicted_ppi_rows = predicted;
 	fss_ppi_hash = fss;
-
+	elog(INFO, "Predict for PARAMETRIZED JOIN: predicted=%lf, fss=%d", predicted, fss);
 	if (predicted >= 0)
 		return predicted;
 	else

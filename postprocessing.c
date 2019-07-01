@@ -1,5 +1,6 @@
 #include "aqo.h"
 #include "access/parallel.h"
+#include "optimizer/optimizer.h"
 #include "utils/queryenvironment.h"
 
 /*****************************************************************************
@@ -104,7 +105,7 @@ learn_sample(List *clauselist, List *selectivities, List *relidslist,
 
 	fss_hash = get_fss_for_object(clauselist, selectivities, relidslist,
 					   &nfeatures, &features);
-
+	elog(INFO, "-- LEARN: fss_new=%d", fss_hash);
 	if (nfeatures > 0)
 		for (i = 0; i < aqo_K; ++i)
 			matrix[i] = palloc(sizeof(double) * nfeatures);
@@ -290,8 +291,8 @@ learnOnPlanState(PlanState *p, void *context)
 					predicted = p->plan->plan_rows;
 
 				/* It is needed for correct exp(result) calculation. */
-				if (learn_rows < 1.)
-					learn_rows = 1.;
+//				if (learn_rows < 1.)
+				learn_rows = clamp_row_est(learn_rows);
 			}
 			else
 			{
@@ -302,12 +303,12 @@ learnOnPlanState(PlanState *p, void *context)
 				 */
 				learn_rows = 1.;
 			}
-
+elog(INFO, "LEARN: fss_old=%d learn_rows=%lf", p->plan->fss_hash, learn_rows);
 			/*
 			 * Some execution logic optimizations can lead to the situation
 			 * than a subtree will never be visited.
 			 */
-			if (!(p->instrument->ntuples <= 0. && p->instrument->nloops <= 0.))
+//			if (!(p->instrument->ntuples <= 0. && p->instrument->nloops <= 0.))
 				learn_sample(SubplanCtx.clauselist, SubplanCtx.selectivities,
 								p->plan->path_relids, learn_rows, predicted);
 		}
@@ -315,8 +316,7 @@ learnOnPlanState(PlanState *p, void *context)
 
 	ctx->clauselist = list_concat(ctx->clauselist, SubplanCtx.clauselist);
 	ctx->selectivities = list_concat(ctx->selectivities,
-													SubplanCtx.selectivities);
-
+												SubplanCtx.selectivities);
 	return false;
 }
 
