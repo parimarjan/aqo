@@ -304,10 +304,13 @@ learnOnPlanState(PlanState *p, void *context)
 			}
 
 			/*
-			 * Some execution logic optimizations can lead to the situation
-			 * than a subtree will never be visited.
+			 * A subtree was not visited. In this case we can not teach AQO
+			 * because ntuples value is equal to 0 and we will got learn rows == 1.
+			 * It is false teaching, because at another place of a plan
+			 * scanning of the node may produce many tuples.
 			 */
-			learn_sample(SubplanCtx.clauselist, SubplanCtx.selectivities,
+			if (p->instrument->nloops >= 1)
+				learn_sample(SubplanCtx.clauselist, SubplanCtx.selectivities,
 								p->plan->path_relids, learn_rows, predicted);
 		}
 	}
