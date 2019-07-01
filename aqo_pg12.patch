@@ -1,5 +1,5 @@
 diff --git a/src/backend/commands/explain.c b/src/backend/commands/explain.c
-index 92969636b7..442480bb90 100644
+index 92969636b7..57c65f5e30 100644
 --- a/src/backend/commands/explain.c
 +++ b/src/backend/commands/explain.c
 @@ -46,6 +46,9 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
@@ -23,25 +23,7 @@ index 92969636b7..442480bb90 100644
  	ExplainCloseGroup("Query", NULL, true, es);
  }
  
-@@ -1041,6 +1048,17 @@ ExplainPreScanNode(PlanState *planstate, Bitmapset **rels_used)
- 	return planstate_tree_walker(planstate, ExplainPreScanNode, rels_used);
- }
- 
-+static bool
-+we_need_to_sum_tuples(const Plan *plan)
-+{
-+	if (plan->path_parallel_workers > 0 && (
-+		plan->parallel_aware || nodeTag(plan) == T_HashJoin ||
-+								nodeTag(plan) == T_MergeJoin ||
-+								nodeTag(plan) == T_NestLoop))
-+		return true;
-+	return false;
-+}
-+
- /*
-  * ExplainNode -
-  *	  Appends a description of a plan tree to es->str
-@@ -1523,6 +1541,38 @@ ExplainNode(PlanState *planstate, List *ancestors,
+@@ -1523,6 +1530,38 @@ ExplainNode(PlanState *planstate, List *ancestors,
  				appendStringInfo(es->str,
  								 " (actual rows=%.0f loops=%.0f)",
  								 rows, nloops);
@@ -52,7 +34,7 @@ index 92969636b7..442480bb90 100644
 +				int wrkrs = 1;
 +				double error = -1.;
 +
-+				if (planstate->worker_instrument && we_need_to_sum_tuples(plan))
++				if (planstate->worker_instrument && IsParallelTuplesProcessing(plan))
 +				{
 +					int i;
 +					for (i = 0; i < planstate->worker_instrument->num_workers; i++)
@@ -66,29 +48,20 @@ index 92969636b7..442480bb90 100644
 +
 +				if (plan->predicted_cardinality > 0.)
 +				{
-+					error = 100. * (plan->predicted_cardinality-(rows*wrkrs)) / (rows * wrkrs);
++					error = 100. * (plan->predicted_cardinality - (rows*wrkrs))
++												/ plan->predicted_cardinality);
 +					appendStringInfo(es->str,
-+							" (AQO predicted: cardinality=%lf, error=%.0lf%%, fss=%d, wrkrs=%d, wrkrsHasInstr=%hhu, rows=%lf)",
-+							plan->predicted_cardinality, error, plan->fss_hash, wrkrs, planstate->worker_instrument != NULL, rows);
++							" (AQO predicted: cardinality=%lf, error=%.0lf%%, fsspace_hash=%d)",
++							plan->predicted_cardinality, error, plan->fss_hash);
 +				}
 +				else
-+					appendStringInfo(es->str,
-+												" (Bogus AQO: cardinality=%.0lf, fss=%d)",
-+												plan->predicted_cardinality, plan->fss_hash);
++					appendStringInfo(es->str, " (AQO not used, fsspace_hash=%d)",
++																plan->fss_hash);
 +			}
 +#endif
  		}
  		else
  		{
-@@ -1540,7 +1590,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
- 	else if (es->analyze)
- 	{
- 		if (es->format == EXPLAIN_FORMAT_TEXT)
--			appendStringInfoString(es->str, " (never executed)");
-+			appendStringInfo(es->str, " (never executed, predicted=%lf, fss=%d, [%lf, %lf])", plan->predicted_cardinality, plan->fss_hash, planstate->instrument->ntuples, planstate->instrument->nloops);
- 		else
- 		{
- 			if (es->timing)
 diff --git a/src/backend/nodes/copyfuncs.c b/src/backend/nodes/copyfuncs.c
 index 78deade89b..b1470147e9 100644
 --- a/src/backend/nodes/copyfuncs.c
@@ -107,7 +80,7 @@ index 78deade89b..b1470147e9 100644
  	COPY_BITMAPSET_FIELD(allParam);
  }
 diff --git a/src/backend/optimizer/path/costsize.c b/src/backend/optimizer/path/costsize.c
-index a2a9b1f7be..bc7a69bb05 100644
+index a2a9b1f7be..4b766b9885 100644
 --- a/src/backend/optimizer/path/costsize.c
 +++ b/src/backend/optimizer/path/costsize.c
 @@ -96,6 +96,10 @@
@@ -424,7 +397,22 @@ index a2a9b1f7be..bc7a69bb05 100644
  {
  	double		nrows;
  
-@@ -5478,10 +5594,10 @@ page_size(double tuples, int width)
+@@ -5474,14 +5590,25 @@ page_size(double tuples, int width)
+ 	return ceil(relation_byte_size(tuples, width) / BLCKSZ);
+ }
+ 
++bool
++IsParallelTuplesProcessing(const Plan *plan)
++{
++	if (plan->path_parallel_workers > 0 && (
++		plan->parallel_aware || nodeTag(plan) == T_HashJoin ||
++								nodeTag(plan) == T_MergeJoin ||
++								nodeTag(plan) == T_NestLoop))
++		return true;
++	return false;
++}
++
+ /*
   * Estimate the fraction of the work that each worker will do given the
   * number of workers budgeted for the path.
   */
@@ -438,7 +426,7 @@ index a2a9b1f7be..bc7a69bb05 100644
  
  	/*
  	 * Early experience with parallel query suggests that when there is only
-@@ -5498,7 +5614,7 @@ get_parallel_divisor(Path *path)
+@@ -5498,7 +5625,7 @@ get_parallel_divisor(Path *path)
  	{
  		double		leader_contribution;
  
@@ -950,7 +938,7 @@ index 70f8b8e22b..d188c2596a 100644
  	 * Information for management of parameter-change-driven rescanning
  	 *
 diff --git a/src/include/optimizer/cost.h b/src/include/optimizer/cost.h
-index 9b6bdbc518..4f93e222ca 100644
+index 9b6bdbc518..2a0caa6474 100644
 --- a/src/include/optimizer/cost.h
 +++ b/src/include/optimizer/cost.h
 @@ -39,6 +39,33 @@ typedef enum
@@ -1021,10 +1009,11 @@ index 9b6bdbc518..4f93e222ca 100644
  extern void set_subquery_size_estimates(PlannerInfo *root, RelOptInfo *rel);
  extern void set_function_size_estimates(PlannerInfo *root, RelOptInfo *rel);
  extern void set_values_size_estimates(PlannerInfo *root, RelOptInfo *rel);
-@@ -198,5 +241,6 @@ extern void set_foreign_size_estimates(PlannerInfo *root, RelOptInfo *rel);
+@@ -198,5 +241,7 @@ extern void set_foreign_size_estimates(PlannerInfo *root, RelOptInfo *rel);
  extern PathTarget *set_pathtarget_cost_width(PlannerInfo *root, PathTarget *target);
  extern double compute_bitmap_pages(PlannerInfo *root, RelOptInfo *baserel,
  								   Path *bitmapqual, int loop_count, Cost *cost, double *tuple);
++extern bool IsParallelTuplesProcessing(const Plan *plan);
 +extern double get_parallel_divisor(int parallel_workers);
  
  #endif							/* COST_H */

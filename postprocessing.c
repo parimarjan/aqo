@@ -185,17 +185,6 @@ restore_selectivities(List *clauselist,
 	return lst;
 }
 
-static bool
-we_need_to_sum_tuples(const Plan *plan)
-{
-	if (plan->path_parallel_workers > 0 && (
-		plan->parallel_aware || nodeTag(plan) == T_HashJoin ||
-								nodeTag(plan) == T_MergeJoin ||
-								nodeTag(plan) == T_NestLoop))
-		return true;
-	return false;
-}
-
 /*
  * Walks over obtained PlanState tree, collects relation objects with their
  * clauses, selectivities and relids and passes each object to learn_sample.
@@ -250,7 +239,7 @@ learnOnPlanState(PlanState *p, void *context)
 			if (p->instrument->nloops > 0.)
 			{
 				/* If we can strongly calculate produced rows, do it. */
-				if (p->worker_instrument && we_need_to_sum_tuples(p->plan))
+				if (p->worker_instrument && IsParallelTuplesProcessing(p->plan))
 				{
 					double wnloops = 0.;
 					double wntuples = 0.;
@@ -276,7 +265,8 @@ learnOnPlanState(PlanState *p, void *context)
 											(p->instrument->nloops - wnloops);
 				}
 				else
-					/* We don't have any workers. */
+					/* This node does not required to sum tuples of each worker
+					 * to calculate produced rows.  */
 					learn_rows = p->instrument->ntuples / p->instrument->nloops;
 
 				if (p->plan->predicted_cardinality > 0.)
