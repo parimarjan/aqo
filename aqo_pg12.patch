@@ -1,8 +1,16 @@
 diff --git a/src/backend/commands/explain.c b/src/backend/commands/explain.c
-index 92969636b7..57c65f5e30 100644
+index 92969636b7..d05b07e037 100644
 --- a/src/backend/commands/explain.c
 +++ b/src/backend/commands/explain.c
-@@ -46,6 +46,9 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
+@@ -24,6 +24,7 @@
+ #include "nodes/extensible.h"
+ #include "nodes/makefuncs.h"
+ #include "nodes/nodeFuncs.h"
++#include "optimizer/cost.h"
+ #include "parser/parsetree.h"
+ #include "rewrite/rewriteHandler.h"
+ #include "storage/bufmgr.h"
+@@ -46,6 +47,9 @@ ExplainOneQuery_hook_type ExplainOneQuery_hook = NULL;
  /* Hook for plugins to get control in explain_get_index_name() */
  explain_get_index_name_hook_type explain_get_index_name_hook = NULL;
  
@@ -12,7 +20,7 @@ index 92969636b7..57c65f5e30 100644
  
  /* OR-able flags for ExplainXMLTag() */
  #define X_OPENING 0
-@@ -596,6 +599,10 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
+@@ -596,6 +600,10 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
  		ExplainPropertyFloat("Execution Time", "ms", 1000.0 * totaltime, 3,
  							 es);
  
@@ -23,7 +31,7 @@ index 92969636b7..57c65f5e30 100644
  	ExplainCloseGroup("Query", NULL, true, es);
  }
  
-@@ -1523,6 +1530,38 @@ ExplainNode(PlanState *planstate, List *ancestors,
+@@ -1523,6 +1531,38 @@ ExplainNode(PlanState *planstate, List *ancestors,
  				appendStringInfo(es->str,
  								 " (actual rows=%.0f loops=%.0f)",
  								 rows, nloops);
@@ -49,7 +57,7 @@ index 92969636b7..57c65f5e30 100644
 +				if (plan->predicted_cardinality > 0.)
 +				{
 +					error = 100. * (plan->predicted_cardinality - (rows*wrkrs))
-+												/ plan->predicted_cardinality);
++												/ plan->predicted_cardinality;
 +					appendStringInfo(es->str,
 +							" (AQO predicted: cardinality=%lf, error=%.0lf%%, fsspace_hash=%d)",
 +							plan->predicted_cardinality, error, plan->fss_hash);
