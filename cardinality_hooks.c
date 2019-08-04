@@ -1,5 +1,15 @@
 #include "aqo.h"
+#include "utils/lsyscache.h"
 
+void debug_print(char *msg)
+{
+	FILE *fp = fopen("./debug.txt", "ab");
+	if (fp != NULL)
+	{
+		fputs(msg, fp);
+		fclose(fp);
+	}
+}
 /*****************************************************************************
  *
  *	CARDINALITY ESTIMATION HOOKS
@@ -47,6 +57,7 @@ static double call_default_get_parameterized_joinrel_size(PlannerInfo *root,
 void
 call_default_set_baserel_rows_estimate(PlannerInfo *root, RelOptInfo *rel)
 {
+  debug_print("hello from aqo-test!\n");
 	if (prev_set_baserel_rows_estimate_hook)
 		prev_set_baserel_rows_estimate_hook(root, rel);
 	else
@@ -118,55 +129,28 @@ call_default_set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 
 /*
  * Our hook for setting baserel rows estimate.
- * Extracts clauses, their selectivities and list of relation relids and
- * passes them to predict_for_relation.
+ * Should just read the cardinalities from a file, and log error message
+ * if any cardinality is missing.
+ * TODO: figure out a smooth way to call default function if we don't have
+ * correct cardinality.
  */
 void
 aqo_set_baserel_rows_estimate(PlannerInfo *root, RelOptInfo *rel)
 {
-	double		predicted;
-	Oid			relid;
-	List	   *relids;
-	List	   *selectivities = NULL;
-	List	*restrict_clauses;
-	int fss = 0;
-
-	if (query_context.use_aqo || query_context.learn_aqo)
-		selectivities = get_selectivities(root, rel->baserestrictinfo, 0,
-										  JOIN_INNER, NULL);
-
-	if (!query_context.use_aqo)
+  debug_print("hello from aqo-test1!\n");
+	char buffer[50];
+	int i = 0;
+	for (int rti = 1; rti < root->simple_rel_array_size; rti++)
 	{
-		if (query_context.learn_aqo)
-			list_free_deep(selectivities);
-
-		call_default_set_baserel_rows_estimate(root, rel);
-		return;
+		if (bms_is_member(rti, rel->relids)) {
+			i += 1;
+			RangeTblEntry *rte=root->simple_rte_array[rti];
+			sprintf(buffer, "%d: %d, %s\n", i, rti, get_rel_name(rte->relid));
+			debug_print(buffer);
+		}
 	}
-
-	relid = planner_rt_fetch(rel->relid, root)->relid;
-	relids = list_make1_int(relid);
-
-	restrict_clauses = list_copy(rel->baserestrictinfo);
-	predicted = predict_for_relation(restrict_clauses, selectivities, relids, &fss);
-	rel->fss_hash = fss;
-
-	if (predicted >= 0)
-	{
-		rel->rows = predicted;
-		rel->predicted_cardinality = predicted;
-	}
-	else
-	{
-		call_default_set_baserel_rows_estimate(root, rel);
-		rel->predicted_cardinality = -1.;
-	}
-
-	list_free_deep(selectivities);
-	list_free(restrict_clauses);
-	list_free(relids);
+  rel->rows = 42.0;
 }
-
 
 void
 ppi_hook(ParamPathInfo *ppi)
