@@ -3,6 +3,9 @@
 #include "access/table.h"
 #include "commands/extension.h"
 
+/*#define JSMN_HEADER*/
+/*#include "jsmn.h"*/
+
 /*****************************************************************************
  *
  *	QUERY PREPROCESSING HOOKS
@@ -58,12 +61,40 @@ static bool isQueryUsingSystemRelation_walker(Node *node, void *context);
 
 /*
  * Saves query text into query_text variable.
- * Query text field in aqo_queries table is for user.
  */
 void
 get_query_text(ParseState *pstate, Query *query)
 {
 	MemoryContext	oldCxt;
+  /*static const char *JSON_STRING = "{\"users\": 10, \"posts\": 20, \"comments\": 50, \"comments posts users\": 100, \"comments posts\": 42, \"comments users\": 420, \"posts users\": 21}";*/
+  char *filename;
+  char *buffer;
+  long length;
+  FILE *f;
+
+  filename = "./cur_cardinalities.json";
+  buffer = 0;
+  f = fopen(filename, "rb");
+
+  if (f)
+  {
+    fseek(f, 0, SEEK_END);
+    length = ftell (f);
+    fseek(f, 0, SEEK_SET);
+    buffer = malloc(length);
+    if (buffer)
+    {
+      fread (buffer, 1, length, f);
+    }
+    fclose (f);
+  }
+
+  if (buffer)
+  {
+    debug_print(buffer);
+    // FIXME: check if it is same query or not.
+    query_context.cardinalities = buffer;
+  }
 
 	/*
 	 * Duplicate query string into private AQO memory context for guard

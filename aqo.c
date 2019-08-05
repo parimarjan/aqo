@@ -93,14 +93,14 @@ _PG_init(void)
 							 NULL,
 							 NULL);
 
-	prev_planner_hook							= planner_hook;
-	planner_hook								= aqo_planner;
-	prev_post_parse_analyze_hook				= post_parse_analyze_hook;
+	/*prev_planner_hook							= planner_hook;*/
+  /*planner_hook								    = aqo_planner;*/
+  prev_post_parse_analyze_hook			= post_parse_analyze_hook;
 	post_parse_analyze_hook						= get_query_text;
-	prev_ExecutorStart_hook						= ExecutorStart_hook;
-	ExecutorStart_hook							= aqo_ExecutorStart;
-	prev_ExecutorEnd_hook						= ExecutorEnd_hook;
-	ExecutorEnd_hook							= aqo_ExecutorEnd;
+  /*prev_ExecutorStart_hook						= ExecutorStart_hook;*/
+	/*ExecutorStart_hook							= aqo_ExecutorStart;*/
+	/*prev_ExecutorEnd_hook						= ExecutorEnd_hook;*/
+	/*ExecutorEnd_hook							= aqo_ExecutorEnd;*/
 	prev_set_baserel_rows_estimate_hook			= set_baserel_rows_estimate_hook;
 	set_baserel_rows_estimate_hook				= aqo_set_baserel_rows_estimate;
 	prev_get_parameterized_baserel_size_hook	= get_parameterized_baserel_size_hook;
@@ -109,13 +109,13 @@ _PG_init(void)
 	set_joinrel_size_estimates_hook				= aqo_set_joinrel_size_estimates;
 	prev_get_parameterized_joinrel_size_hook	= get_parameterized_joinrel_size_hook;
 	get_parameterized_joinrel_size_hook			= aqo_get_parameterized_joinrel_size;
-	prev_copy_generic_path_info_hook			= copy_generic_path_info_hook;
-	copy_generic_path_info_hook					= aqo_copy_generic_path_info;
-	prev_ExplainOnePlan_hook					= ExplainOnePlan_hook;
-	ExplainOnePlan_hook							= print_into_explain;
-	parampathinfo_postinit_hook					= ppi_hook;
+	/*prev_copy_generic_path_info_hook			= copy_generic_path_info_hook;*/
+	/*copy_generic_path_info_hook					= aqo_copy_generic_path_info;*/
+	/*prev_ExplainOnePlan_hook					= ExplainOnePlan_hook;*/
+	/*ExplainOnePlan_hook							= print_into_explain;*/
+	/*parampathinfo_postinit_hook					= ppi_hook;*/
 
-	init_deactivated_queries_storage();
+	/*init_deactivated_queries_storage();*/
 	AQOMemoryContext = AllocSetContextCreate(TopMemoryContext, "AQOMemoryContext", ALLOCSET_DEFAULT_SIZES);
 }
 
@@ -132,3 +132,16 @@ invalidate_deactivated_queries_cache(PG_FUNCTION_ARGS)
 	init_deactivated_queries_storage();
 	PG_RETURN_POINTER(NULL);
 }
+
+// pari: create new module for all these utility functions
+
+void debug_print(char *msg)
+{
+	FILE *fp = fopen("./debug.txt", "ab");
+	if (fp != NULL)
+	{
+		fputs(msg, fp);
+		fclose(fp);
+	}
+}
+

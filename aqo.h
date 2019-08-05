@@ -148,6 +148,10 @@
 #include "utils/fmgroids.h"
 #include "utils/snapmgr.h"
 
+//#define JSMN_HEADER
+//#include "jsmn.h"
+
+void debug_print(char *msg);
 
 /* Check PostgreSQL version (9.6.0 contains important changes in planner) */
 #if PG_VERSION_NUM < 90600
@@ -213,6 +217,7 @@ typedef struct QueryContextData
 	/* Query execution time */
 	instr_time	query_starttime;
 	double		query_planning_time;
+  const char *cardinalities;
 } QueryContextData;
 
 extern double predicted_ppi_rows;
@@ -306,6 +311,11 @@ void print_into_explain(PlannedStmt *plannedstmt, IntoClause *into,
 void		disable_aqo_for_query(void);
 
 /* Cardinality estimation hooks */
+
+// PN:
+double find_cardinality(const char *cardinalities, char *tables);
+char * join_strs(int num, char **words);
+
 extern void aqo_set_baserel_rows_estimate(PlannerInfo *root, RelOptInfo *rel);
 double aqo_get_parameterized_baserel_size(PlannerInfo *root,
 								   RelOptInfo *rel,
