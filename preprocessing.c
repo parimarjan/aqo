@@ -65,17 +65,18 @@ static bool isQueryUsingSystemRelation_walker(Node *node, void *context);
 void
 get_query_text(ParseState *pstate, Query *query)
 {
+  debug_print("!!get query text!!\n");
 	MemoryContext	oldCxt;
-  /*static const char *JSON_STRING = "{\"users\": 10, \"posts\": 20, \"comments\": 50, \"comments posts users\": 100, \"comments posts\": 42, \"comments users\": 420, \"posts users\": 21}";*/
   char *filename;
   char *buffer;
   long length;
   FILE *f;
 
-  filename = "./cur_cardinalities.json";
+  filename = "/data/pg_data_dir/cur_cardinalities.json";
   buffer = 0;
-  f = fopen(filename, "rb");
+  query_context.cardinalities = "";
 
+  f = fopen(filename, "rb");
   if (f)
   {
     fseek(f, 0, SEEK_END);
@@ -91,10 +92,13 @@ get_query_text(ParseState *pstate, Query *query)
 
   if (buffer)
   {
-    debug_print(buffer);
     // FIXME: check if it is same query or not.
     query_context.cardinalities = buffer;
+  } else {
+    debug_print("COULD NOT READ IN THE FILE!\n");
   }
+
+  debug_print(query_context.cardinalities);
 
 	/*
 	 * Duplicate query string into private AQO memory context for guard
