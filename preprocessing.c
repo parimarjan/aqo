@@ -72,6 +72,9 @@ get_query_text(ParseState *pstate, Query *query)
   long length;
   FILE *f;
 
+  // initialize to something in case reading from the file fails
+  query_context.cardinalities = "";
+
   filename = "./cur_cardinalities.json";
   buffer = 0;
   f = fopen(filename, "rb");
