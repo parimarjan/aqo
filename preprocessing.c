@@ -87,7 +87,12 @@ get_query_text(ParseState *pstate, Query *query)
     buffer = malloc(length);
     if (buffer)
     {
-      fread (buffer, 1, length, f);
+      /*fread (buffer, 1, length, f);*/
+			int ch, i = 0;
+      while ((ch = fgetc(f)) != '\0' && ch != EOF) {
+          buffer[i++] = ch;
+      }
+      buffer[i] = '\0';
     }
     fclose (f);
   }
