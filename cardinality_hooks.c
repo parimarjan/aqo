@@ -81,14 +81,14 @@ char * join_strs(int num, char **words)
 
 double find_cardinality(const char *cardinalities, char *tables)
 {
-  double card;
-  int i,r;
   // find the cardinality, by doing a lookup into the stored json
   jsmn_parser p;
   jsmntok_t t[15000];
   jsmn_init(&p);
   char test_str[100];
-  char double_str[20];
+  char double_str[128];
+  double card;
+  int i,r;
   r = jsmn_parse(&p, cardinalities, strlen(cardinalities), t,
                  sizeof(t) / sizeof(t[0]));
   card = 42.0;
@@ -100,27 +100,28 @@ double find_cardinality(const char *cardinalities, char *tables)
 
   /* Loop over all keys of the root object */
   // FIXME: i+=2?
-  for (i = 1; i < r; i+=1) {
+  for (i = 0; i < r; i+=1) {
     if (jsoneq(cardinalities, &t[i], tables) == 0) {
       sprintf(test_str, "%s: %.*s\n", tables, t[i + 1].end - t[i + 1].start,
              cardinalities + t[i + 1].start);
       sprintf(double_str, "%.*s", t[i + 1].end - t[i + 1].start,
              cardinalities + t[i + 1].start);
-      debug_print(test_str);
-      debug_print(double_str);
-      sscanf(double_str, "%lf", &card);
+      card = atof(double_str);
+      /*debug_print(test_str);*/
+      /*debug_print(double_str);*/
+      /*sscanf(double_str, "%lf", &card);*/
       break;
     }
   }
   if (card == 42.0) {
     debug_print("did not find cardinality for: ");
-    debug_print(tables);
-    debug_print("\n");
+    /*debug_print(tables);*/
+    /*debug_print("\n");*/
   } else {
-    debug_print("FOUND! :D\n");
-    debug_print(tables);
-    debug_print("\n");
-    debug_print(double_str);
+    /*debug_print("FOUND! :D\n");*/
+    /*debug_print(tables);*/
+    /*debug_print("\n");*/
+    /*debug_print(double_str);*/
     /*debug_print("\n");*/
   }
   debug_print("returning from find cardinality\n");
