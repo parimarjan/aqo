@@ -73,8 +73,10 @@ get_query_text(ParseState *pstate, Query *query)
   FILE *f;
 
   filename = "/data/pg_data_dir/cur_cardinalities.json";
-  buffer = 0;
+  // initialize to something in case reading from the file fails
   query_context.cardinalities = "";
+
+  buffer = 0;
 
   f = fopen(filename, "rb");
   if (f)
