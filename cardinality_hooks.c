@@ -82,6 +82,7 @@ char * join_strs(int num, char **words)
 double find_cardinality(const char *cardinalities, char *tables)
 {
   // find the cardinality, by doing a lookup into the stored json
+  // FIXME: use smaller sized buffers?
   jsmn_parser p;
   jsmntok_t t[15000];
   jsmn_init(&p);
@@ -91,6 +92,8 @@ double find_cardinality(const char *cardinalities, char *tables)
   int i,r;
   r = jsmn_parse(&p, cardinalities, strlen(cardinalities), t,
                  sizeof(t) / sizeof(t[0]));
+  sprintf(test_str, "r: %d\n", r);
+  debug_print(test_str);
   card = 42.0;
 
   if (r < 0) {
@@ -107,38 +110,28 @@ double find_cardinality(const char *cardinalities, char *tables)
       sprintf(double_str, "%.*s", t[i + 1].end - t[i + 1].start,
              cardinalities + t[i + 1].start);
       card = atof(double_str);
-      /*debug_print(test_str);*/
-      /*debug_print(double_str);*/
-      /*sscanf(double_str, "%lf", &card);*/
       break;
     }
   }
   if (card == 42.0) {
     debug_print("did not find cardinality for: ");
-    /*debug_print(tables);*/
-    /*debug_print("\n");*/
-  } else {
-    /*debug_print("FOUND! :D\n");*/
-    /*debug_print(tables);*/
-    /*debug_print("\n");*/
-    /*debug_print(double_str);*/
-    /*debug_print("\n");*/
   }
   debug_print("returning from find cardinality\n");
-  return card;
+  // FIXME: use clamp row estimate here
+  return card + 1.00;
 }
 
 double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
 {
   int MAX_TABLES, MAX_TABLE_NAME_SIZE;
   // can we just modify this stuff?
-	char **tables;
+	char *tables[20];
+  char debug_text[1000];
 	int num_tables;
   char *joined;
   double rows;
-	MAX_TABLES = 50;
 	MAX_TABLE_NAME_SIZE = 50;
-	tables = malloc(sizeof(int *) * MAX_TABLES);
+	/*tables = malloc(sizeof(int *) * MAX_TABLES);*/
 	num_tables = 0;
   debug_print("hello from aqo baserel!\n");
 	for (int rti = 0; rti < root->simple_rel_array_size; rti++)
@@ -152,6 +145,9 @@ double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
 			num_tables += 1;
 		}
 	}
+
+  sprintf(debug_text, "num tables after: %d\n", num_tables);
+  debug_print(debug_text);
 
   /*joined = join_strs(num_tables, tables);*/
 	/*debug_print(joined);*/
@@ -169,9 +165,9 @@ double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
 
   free(joined);
 
+  debug_print("before return rows\n");
   return rows;
 }
-
 
 /*
  * Calls standard set_baserel_rows_estimate or its previous hook.

@@ -105,7 +105,7 @@ get_query_text(ParseState *pstate, Query *query)
     debug_print("COULD NOT READ IN THE FILE!\n");
   }
 
-  debug_print(query_context.cardinalities);
+  /*debug_print(query_context.cardinalities);*/
 
 	/*
 	 * Duplicate query string into private AQO memory context for guard
