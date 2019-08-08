@@ -118,7 +118,10 @@ double find_cardinality(const char *cardinalities, char *tables)
   }
   debug_print("returning from find cardinality\n");
   // FIXME: use clamp row estimate here
-  return card + 1.00;
+  if (card == 0.00) {
+    card += 1.00;
+  }
+  return card;
 }
 
 double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
@@ -131,9 +134,8 @@ double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
   char *joined;
   double rows;
 	MAX_TABLE_NAME_SIZE = 50;
-	/*tables = malloc(sizeof(int *) * MAX_TABLES);*/
 	num_tables = 0;
-  debug_print("hello from aqo baserel!\n");
+  debug_print("hello from get_json_cardinality!\n");
 	for (int rti = 0; rti < root->simple_rel_array_size; rti++)
 	{
 		if (bms_is_member(rti, rel->relids)) {
@@ -254,6 +256,7 @@ call_default_set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 void
 aqo_set_baserel_rows_estimate(PlannerInfo *root, RelOptInfo *rel)
 {
+  debug_print("hello from aqo baserel!\n");
   rel->rows = get_json_cardinality(root, rel);
 }
 

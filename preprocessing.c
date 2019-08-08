@@ -77,25 +77,29 @@ get_query_text(ParseState *pstate, Query *query)
   query_context.cardinalities = "";
 
   buffer = 0;
-
   f = fopen(filename, "rb");
   if (f)
   {
+    debug_print("file successfully opened\n");
     fseek(f, 0, SEEK_END);
     length = ftell (f);
     fseek(f, 0, SEEK_SET);
-    buffer = malloc(length);
-    if (buffer)
-    {
-      /*fread (buffer, 1, length, f);*/
-			int ch, i = 0;
-      while ((ch = fgetc(f)) != '\0' && ch != EOF) {
-          buffer[i++] = ch;
-      }
-      buffer[i] = '\0';
-    }
-    fclose (f);
+    buffer = malloc(length+1);
+    /*if (buffer)*/
+    /*{*/
+      /*[>fread (buffer, 1, length, f);<]*/
+			/*int ch, i = 0;*/
+      /*while ((ch = fgetc(f)) != '\0' && ch != EOF) {*/
+          /*buffer[i++] = ch;*/
+      /*}*/
+      /*buffer[i] = '\0';*/
+    /*}*/
+    buffer[length] = '\0';
+    fclose(f);
+  } else {
+    debug_print("file failed to open\n");
   }
+  debug_print("file read successfully into buffer\n");
 
   if (buffer)
   {
@@ -105,7 +109,7 @@ get_query_text(ParseState *pstate, Query *query)
     debug_print("COULD NOT READ IN THE FILE!\n");
   }
 
-  /*debug_print(query_context.cardinalities);*/
+  debug_print(query_context.cardinalities);
 
 	/*
 	 * Duplicate query string into private AQO memory context for guard
