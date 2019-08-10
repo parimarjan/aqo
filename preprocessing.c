@@ -2,6 +2,9 @@
 #include "access/parallel.h"
 #include "access/table.h"
 #include "commands/extension.h"
+#include <stdlib.h>
+#include <stdbool.h>
+
 
 /*#define JSMN_HEADER*/
 /*#include "jsmn.h"*/
@@ -60,6 +63,72 @@ static bool isQueryUsingSystemRelation(Query *query);
 static bool isQueryUsingSystemRelation_walker(Node *node, void *context);
 
 /*
+ * 'slurp' reads the file identified by 'path' into a character buffer
+ * pointed at by 'buf', optionally adding a terminating NUL if
+ * 'add_nul' is true. On success, the size of the file is returned; on
+ * failure, -1 is returned and ERRNO is set by the underlying system
+ * or library call that failed.
+ *
+ * WARNING: 'slurp' malloc()s memory to '*buf' which must be freed by
+ * the caller.
+ */
+long slurp(char const* path, char **buf, bool add_nul)
+{
+    FILE  *fp;
+    size_t fsz;
+    long   off_end;
+    int    rc;
+
+    /* Open the file */
+    fp = fopen(path, "rb");
+    if( NULL == fp ) {
+        return -1L;
+    }
+
+    /* Seek to the end of the file */
+    rc = fseek(fp, 0L, SEEK_END);
+    if( 0 != rc ) {
+        return -1L;
+    }
+
+    /* Byte offset to the end of the file (size) */
+    if( 0 > (off_end = ftell(fp)) ) {
+        return -1L;
+    }
+    fsz = (size_t)off_end;
+
+    /* Allocate a buffer to hold the whole file */
+    *buf = malloc( fsz+(int)add_nul );
+    if( NULL == *buf ) {
+        return -1L;
+    }
+
+    /* Rewind file pointer to start of file */
+    rewind(fp);
+
+    /* Slurp file into buffer */
+    if( fsz != fread(*buf, 1, fsz, fp) ) {
+        free(*buf);
+        return -1L;
+    }
+
+    /* Close the file */
+    if( EOF == fclose(fp) ) {
+        free(*buf);
+        return -1L;
+    }
+
+    if( add_nul ) {
+        /* Make sure the buffer is NUL-terminated, just in case */
+        buf[fsz] = '\0';
+    }
+
+    /* Return the file size */
+    return (long)fsz;
+}
+
+
+/*
  * Saves query text into query_text variable.
  */
 void
@@ -70,45 +139,76 @@ get_query_text(ParseState *pstate, Query *query)
   char *filename;
   char *buffer;
   long length;
-  FILE *f;
+  /*FILE *f;*/
 
   filename = "/data/pg_data_dir/cur_cardinalities.json";
   // initialize to something in case reading from the file fails
   query_context.cardinalities = "";
 
-  buffer = 0;
-  f = fopen(filename, "rb");
-  if (f)
-  {
-    debug_print("file successfully opened\n");
-    fseek(f, 0, SEEK_END);
-    length = ftell (f);
-    fseek(f, 0, SEEK_SET);
-    buffer = malloc(length+1);
-    /*if (buffer)*/
-    /*{*/
-      /*[>fread (buffer, 1, length, f);<]*/
-			/*int ch, i = 0;*/
-      /*while ((ch = fgetc(f)) != '\0' && ch != EOF) {*/
-          /*buffer[i++] = ch;*/
-      /*}*/
-      /*buffer[i] = '\0';*/
-    /*}*/
-    buffer[length] = '\0';
-    fclose(f);
-  } else {
-    debug_print("file failed to open\n");
-  }
-  debug_print("file read successfully into buffer\n");
+  buffer = NULL;
+  size_t size = 0;
 
-  if (buffer)
-  {
-    // FIXME: check if it is same query or not.
-    query_context.cardinalities = buffer;
-  } else {
-    debug_print("COULD NOT READ IN THE FILE!\n");
-  }
+  /* Open your_file in read-only mode */
+  FILE *fp = fopen(filename, "r");
 
+  /* Get the buffer size */
+  fseek(fp, 0, SEEK_END); /* Go to end of file */
+  size = ftell(fp); /* How many bytes did we pass ? */
+
+  /* Set position of stream to the beginning */
+  rewind(fp);
+
+  /* Allocate the buffer (no need to initialize it with calloc) */
+  buffer = malloc((size + 1) * sizeof(*buffer)); /* size + 1 byte for the \0 */
+
+  /* Read the file into the buffer */
+  fread(buffer, size, 1, fp); /* Read 1 chunk of size bytes from fp into buffer */
+
+  /* NULL-terminate the buffer */
+  buffer[size] = '\0';
+
+	/*long ret = slurp(filename, &buffer, true);*/
+	/*if (ret < 0) {*/
+		/*debug_print("slurp failed\n");*/
+		/*exit(-1);*/
+	/*}*/
+	/*debug_print("slurp executed\n");*/
+
+  /*buffer = 0;*/
+  /*f = fopen(filename, "rb");*/
+  /*if (f)*/
+  /*{*/
+    /*debug_print("file successfully opened\n");*/
+    /*fseek(f, 0, SEEK_END);*/
+    /*length = ftell (f);*/
+    /*fseek(f, 0, SEEK_SET);*/
+
+    /*buffer = malloc(length+1);*/
+    /*[>if (buffer)<]*/
+    /*[>{<]*/
+      /*[>[>fread (buffer, 1, length, f);<]<]*/
+			/*[>int ch, i = 0;<]*/
+      /*[>while ((ch = fgetc(f)) != '\0' && ch != EOF) {<]*/
+          /*[>buffer[i++] = ch;<]*/
+      /*[>}<]*/
+      /*[>buffer[i] = '\0';<]*/
+    /*[>}<]*/
+    /*buffer[length] = '\0';*/
+    /*fclose(f);*/
+  /*} else {*/
+    /*debug_print("file failed to open\n");*/
+  /*}*/
+  /*debug_print("file read successfully into buffer\n");*/
+
+	if (buffer)
+	{
+		// FIXME: check if it is same query or not.
+		query_context.cardinalities = buffer;
+	} else {
+		debug_print("COULD NOT READ IN THE FILE!\n");
+	}
+
+  debug_print("going to write out cardinalities\n");
   debug_print(query_context.cardinalities);
 
 	/*

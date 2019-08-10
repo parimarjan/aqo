@@ -84,14 +84,14 @@ double find_cardinality(const char *cardinalities, char *tables)
   // find the cardinality, by doing a lookup into the stored json
   // FIXME: use smaller sized buffers?
   jsmn_parser p;
-  jsmntok_t t[15000];
+  jsmntok_t t[150000];
   jsmn_init(&p);
   char test_str[100];
   char double_str[128];
   double card;
   int i,r;
   r = jsmn_parse(&p, cardinalities, strlen(cardinalities), t,
-                 sizeof(t) / sizeof(t[0]));
+                  150000);
   sprintf(test_str, "r: %d\n", r);
   debug_print(test_str);
   card = 42.0;
@@ -113,8 +113,11 @@ double find_cardinality(const char *cardinalities, char *tables)
       break;
     }
   }
+
   if (card == 42.0) {
     debug_print("did not find cardinality for: ");
+    debug_print(tables);
+    exit(-1);
   }
   debug_print("returning from find cardinality\n");
   // FIXME: use clamp row estimate here
