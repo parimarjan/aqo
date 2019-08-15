@@ -5,9 +5,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-
 /*#define JSMN_HEADER*/
-/*#include "jsmn.h"*/
+#include "jsmn.h"
 
 /*****************************************************************************
  *
@@ -61,95 +60,64 @@
 
 static bool isQueryUsingSystemRelation(Query *query);
 static bool isQueryUsingSystemRelation_walker(Node *node, void *context);
+char * read_file(char *);
+void update_cardinalities(const char *);
 
-/*
- * 'slurp' reads the file identified by 'path' into a character buffer
- * pointed at by 'buf', optionally adding a terminating NUL if
- * 'add_nul' is true. On success, the size of the file is returned; on
- * failure, -1 is returned and ERRNO is set by the underlying system
- * or library call that failed.
- *
- * WARNING: 'slurp' malloc()s memory to '*buf' which must be freed by
- * the caller.
+/* @cardinalities: json string.
  */
-long slurp(char const* path, char **buf, bool add_nul)
+void update_cardinalities(const char *cardinalities)
 {
-    FILE  *fp;
-    size_t fsz;
-    long   off_end;
-    int    rc;
+  jsmn_parser p;
+  double card;
+  int i,r;
+  // FIXME: use smaller sized buffers?
+  jsmntok_t t[15000];
+  char test_str[100], table_str[10000];
+  char double_str[128];
 
-    /* Open the file */
-    fp = fopen(path, "rb");
-    if( NULL == fp ) {
-        return -1L;
+  jsmn_init(&p);
+  r = jsmn_parse(&p, cardinalities, strlen(cardinalities), t,
+                  15000);
+  sprintf(test_str, "r: %d\n", r);
+  debug_print(test_str);
+
+  if (r < 0) {
+    sprintf(test_str, "Failed to parse JSON: %d\n", r);
+    error_print(test_str);
+    return;
+  }
+
+  debug_print("going to start printing key-value pairs\n");
+  for (i = 0; i < r; i+=1) {
+    // skip the metadata stuff
+    if (t[i].type != JSMN_STRING) {
+      continue;
     }
-
-    /* Seek to the end of the file */
-    rc = fseek(fp, 0L, SEEK_END);
-    if( 0 != rc ) {
-        return -1L;
-    }
-
-    /* Byte offset to the end of the file (size) */
-    if( 0 > (off_end = ftell(fp)) ) {
-        return -1L;
-    }
-    fsz = (size_t)off_end;
-
-    /* Allocate a buffer to hold the whole file */
-    *buf = malloc( fsz+(int)add_nul );
-    if( NULL == *buf ) {
-        return -1L;
-    }
-
-    /* Rewind file pointer to start of file */
-    rewind(fp);
-
-    /* Slurp file into buffer */
-    if( fsz != fread(*buf, 1, fsz, fp) ) {
-        free(*buf);
-        return -1L;
-    }
-
-    /* Close the file */
-    if( EOF == fclose(fp) ) {
-        free(*buf);
-        return -1L;
-    }
-
-    if( add_nul ) {
-        /* Make sure the buffer is NUL-terminated, just in case */
-        buf[fsz] = '\0';
-    }
-
-    /* Return the file size */
-    return (long)fsz;
+    sprintf(table_str, "%.*s", t[i].end - t[i].start,
+           cardinalities + t[i].start);
+    sprintf(double_str, "%.*s\n", t[i + 1].end - t[i + 1].start,
+           cardinalities + t[i + 1].start);
+    /*debug_print("key: ");*/
+    /*debug_print(table_str);*/
+    /*debug_print("value: ");*/
+    /*debug_print(double_str);*/
+    card = atof(double_str);
+    add_cardinality(table_str, card);
+  }
 }
 
-
-/*
- * Saves query text into query_text variable.
+/* FIXME: do more error checking here.
  */
-void
-get_query_text(ParseState *pstate, Query *query)
+char * read_file(char *filename)
 {
-  debug_print("!!get query text!!\n");
-	MemoryContext	oldCxt;
-  char *filename;
   char *buffer;
-  long length;
-  /*FILE *f;*/
-
-  filename = "/data/pg_data_dir/cur_cardinalities.json";
-  // initialize to something in case reading from the file fails
-  query_context.cardinalities = "";
+  size_t size;
+  FILE *fp = fopen(filename, "r");
 
   buffer = NULL;
-  size_t size = 0;
+  size = 0;
 
   /* Open your_file in read-only mode */
-  FILE *fp = fopen(filename, "r");
 
   /* Get the buffer size */
   fseek(fp, 0, SEEK_END); /* Go to end of file */
@@ -166,50 +134,19 @@ get_query_text(ParseState *pstate, Query *query)
 
   /* NULL-terminate the buffer */
   buffer[size] = '\0';
+  fclose(fp);
+  return buffer;
+}
 
-	/*long ret = slurp(filename, &buffer, true);*/
-	/*if (ret < 0) {*/
-		/*debug_print("slurp failed\n");*/
-		/*exit(-1);*/
-	/*}*/
-	/*debug_print("slurp executed\n");*/
-
-  /*buffer = 0;*/
-  /*f = fopen(filename, "rb");*/
-  /*if (f)*/
-  /*{*/
-    /*debug_print("file successfully opened\n");*/
-    /*fseek(f, 0, SEEK_END);*/
-    /*length = ftell (f);*/
-    /*fseek(f, 0, SEEK_SET);*/
-
-    /*buffer = malloc(length+1);*/
-    /*[>if (buffer)<]*/
-    /*[>{<]*/
-      /*[>[>fread (buffer, 1, length, f);<]<]*/
-			/*[>int ch, i = 0;<]*/
-      /*[>while ((ch = fgetc(f)) != '\0' && ch != EOF) {<]*/
-          /*[>buffer[i++] = ch;<]*/
-      /*[>}<]*/
-      /*[>buffer[i] = '\0';<]*/
-    /*[>}<]*/
-    /*buffer[length] = '\0';*/
-    /*fclose(f);*/
-  /*} else {*/
-    /*debug_print("file failed to open\n");*/
-  /*}*/
-  /*debug_print("file read successfully into buffer\n");*/
-
-	if (buffer)
-	{
-		// FIXME: check if it is same query or not.
-		query_context.cardinalities = buffer;
-	} else {
-		debug_print("COULD NOT READ IN THE FILE!\n");
-	}
-
-  debug_print("going to write out cardinalities\n");
-  debug_print(query_context.cardinalities);
+/*
+ * Parses cardinalities file, and updates the hashmap query_context.cardinalities.
+ * FIXME: check if it is same query or not.
+ */
+void
+get_query_text(ParseState *pstate, Query *query)
+{
+	MemoryContext	oldCxt;
+  char *filename, *file_str;
 
 	/*
 	 * Duplicate query string into private AQO memory context for guard
@@ -222,6 +159,38 @@ get_query_text(ParseState *pstate, Query *query)
 
 	if (prev_post_parse_analyze_hook)
 		prev_post_parse_analyze_hook(pstate, query);
+
+  if (query_context.cardinalities) {
+    // we've already initialized this query
+    return;
+  } else {
+    debug_print("qc.cardinalities was null\n");
+  }
+
+  // always need to initialize to null
+  query_context.cardinalities = NULL;
+  debug_print("!!get query text!!\n");
+  filename = "/data/pg_data_dir/cur_cardinalities.json";
+  file_str = read_file(filename);
+	if (file_str)
+	{
+    debug_print(file_str);
+    // let us loop over the json, and add everything to the hashmap
+    update_cardinalities(file_str);
+    print_cardinalities();
+    /*error_print("nothing implemented after this\n");*/
+    struct cardinality *test;
+    HASH_FIND_STR(query_context.cardinalities, "title", test);
+    if (test) {
+      debug_print("key found\n");
+    } else {
+      debug_print("key NOT FOUND\n");
+    }
+	} else {
+		error_print("COULD NOT READ IN THE FILE!\n");
+    return;
+	}
+
 }
 
 /*

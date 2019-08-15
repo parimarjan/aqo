@@ -2,7 +2,7 @@
 #include "utils/lsyscache.h"
 
 /*#define JSMN_HEADER*/
-#include "jsmn.h"
+/*#include "jsmn.h"*/
 
 /*****************************************************************************
  *
@@ -43,13 +43,37 @@ static double call_default_get_parameterized_joinrel_size(PlannerInfo *root,
 											Path *inner_path,
 											SpecialJoinInfo *sjinfo,
 											List *restrict_clauses);
+double find_cardinality(char *);
+char * join_strs(int , char **);
+static int str_compare(const void*, const void*);
 
-int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
-  if (tok->type == JSMN_STRING && (int)strlen(s) == tok->end - tok->start &&
-      strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
-    return 0;
+double find_cardinality(char *key)
+{
+	struct cardinality *c;
+  unsigned int num_keys;
+  char debug_text[100];
+  debug_print("in find cardinality\n");
+  /*print_cardinalities();*/
+
+  num_keys = HASH_COUNT(query_context.cardinalities);
+  sprintf(debug_text, "num keys: %d\n", num_keys);
+  debug_print(debug_text);
+
+  c = (struct cardinality *) malloc(sizeof *c);
+  HASH_FIND_STR(query_context.cardinalities, key, c);
+
+  // TODO: can free the structure?
+  debug_print(key);
+  if (c) {
+    debug_print("\nfound key in the hashmap\n");
+  } else {
+    error_print(key);
+    error_print("\ndid not find key in hashmap\n");
+    debug_print("\ndid not find key in hashmap\n");
+    // FIXME: this should be just for cross joins
+    return 1000000000.00;
   }
-  return -1;
+  return c->cardinality;
 }
 
 // Defining comparator function for strings
@@ -79,66 +103,19 @@ char * join_strs(int num, char **words)
 	return message;
 }
 
-double find_cardinality(const char *cardinalities, char *tables)
-{
-  // find the cardinality, by doing a lookup into the stored json
-  // FIXME: use smaller sized buffers?
-  jsmn_parser p;
-  jsmntok_t t[150000];
-  jsmn_init(&p);
-  char test_str[100];
-  char double_str[128];
-  double card;
-  int i,r;
-  r = jsmn_parse(&p, cardinalities, strlen(cardinalities), t,
-                  150000);
-  sprintf(test_str, "r: %d\n", r);
-  debug_print(test_str);
-  card = 42.0;
-
-  if (r < 0) {
-    sprintf(test_str, "Failed to parse JSON: %d\n", r);
-    debug_print(test_str);
-  }
-
-  /* Loop over all keys of the root object */
-  // FIXME: i+=2?
-  for (i = 0; i < r; i+=1) {
-    if (jsoneq(cardinalities, &t[i], tables) == 0) {
-      sprintf(test_str, "%s: %.*s\n", tables, t[i + 1].end - t[i + 1].start,
-             cardinalities + t[i + 1].start);
-      sprintf(double_str, "%.*s", t[i + 1].end - t[i + 1].start,
-             cardinalities + t[i + 1].start);
-      card = atof(double_str);
-      break;
-    }
-  }
-
-  if (card == 42.0) {
-    debug_print("did not find cardinality for: ");
-    debug_print(tables);
-    exit(-1);
-  }
-  debug_print("returning from find cardinality\n");
-  // FIXME: use clamp row estimate here
-  if (card == 0.00) {
-    card += 1.00;
-  }
-  return card;
-}
-
 double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
 {
-  int MAX_TABLES, MAX_TABLE_NAME_SIZE;
+  int MAX_TABLE_NAME_SIZE;
   // can we just modify this stuff?
 	char *tables[20];
-  char debug_text[1000];
+  char debug_text[10000];
 	int num_tables;
   char *joined;
   double rows;
-	MAX_TABLE_NAME_SIZE = 50;
+	MAX_TABLE_NAME_SIZE = 1000;
 	num_tables = 0;
   debug_print("hello from get_json_cardinality!\n");
+  // FIXME: for each table, check if it is in cardinalities or not
 	for (int rti = 0; rti < root->simple_rel_array_size; rti++)
 	{
 		if (bms_is_member(rti, rel->relids)) {
@@ -151,26 +128,27 @@ double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
 		}
 	}
 
+  /*debug_print(query_text);*/
   sprintf(debug_text, "num tables after: %d\n", num_tables);
   debug_print(debug_text);
 
-  /*joined = join_strs(num_tables, tables);*/
-	/*debug_print(joined);*/
-  /*debug_print("\n");*/
-  /*free(joined);*/
-
+  // TODO: use bitset instead of joined strings somehow for cardinalities
+  // lookup.
 	qsort(tables, num_tables, sizeof(const char*), str_compare);
   joined = join_strs(num_tables, tables);
 	debug_print(joined);
   debug_print("\n");
 
   debug_print("before find cardinality\n");
-  rows = find_cardinality(query_context.cardinalities, joined);
+  rows = find_cardinality(joined);
   debug_print("rows found\n");
-
   free(joined);
 
   debug_print("before return rows\n");
+  if (rows == 0.00) {
+    // zero makes postgres mad
+    rows += 1.00;
+  }
   return rows;
 }
 
@@ -251,10 +229,8 @@ call_default_set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 
 /*
  * Our hook for setting baserel rows estimate.
- * Should just read the cardinalities from a file, and log error message
- * if any cardinality is missing.
- * TODO: figure out a smooth way to call default function if we don't have
- * correct cardinality.
+ * Tries to find cardinality in the loaded cardinalities map (in preprocessing
+ * hook), and if it is not present, then call the default implementation.
  */
 void
 aqo_set_baserel_rows_estimate(PlannerInfo *root, RelOptInfo *rel)

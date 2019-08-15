@@ -148,10 +148,10 @@
 #include "utils/fmgroids.h"
 #include "utils/snapmgr.h"
 
-//#define JSMN_HEADER
-//#include "jsmn.h"
+#include "uthash.h"
 
 void debug_print(char *msg);
+void error_print(char *msg);
 
 /* Check PostgreSQL version (9.6.0 contains important changes in planner) */
 #if PG_VERSION_NUM < 90600
@@ -202,6 +202,12 @@ typedef struct
 	int64		executions_without_aqo;
 }	QueryStat;
 
+struct cardinality {
+  char *table_names;
+  double cardinality;
+  UT_hash_handle hh;         /* makes this structure hashable */
+};
+
 /* Parameters for current query */
 typedef struct QueryContextData
 {
@@ -217,7 +223,7 @@ typedef struct QueryContextData
 	/* Query execution time */
 	instr_time	query_starttime;
 	double		query_planning_time;
-  const char *cardinalities;
+  struct cardinality *cardinalities;
 } QueryContextData;
 
 extern double predicted_ppi_rows;
@@ -312,10 +318,6 @@ void		disable_aqo_for_query(void);
 
 /* Cardinality estimation hooks */
 
-// PN:
-double find_cardinality(const char *cardinalities, char *tables);
-char * join_strs(int num, char **words);
-
 extern void aqo_set_baserel_rows_estimate(PlannerInfo *root, RelOptInfo *rel);
 double aqo_get_parameterized_baserel_size(PlannerInfo *root,
 								   RelOptInfo *rel,
@@ -375,7 +377,9 @@ void cache_selectivity(int clause_hash,
 				  int relid,
 				  int global_relid,
 				  double selectivity);
-double	   *selectivity_cache_find_global_relid(int clause_hash, int global_relid);
+double	*selectivity_cache_find_global_relid(int clause_hash, int global_relid);
 void		selectivity_cache_clear(void);
+void add_cardinality(char *, double);
+void print_cardinalities();
 
 #endif

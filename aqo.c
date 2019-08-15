@@ -95,7 +95,7 @@ _PG_init(void)
 
 	/*prev_planner_hook							= planner_hook;*/
   /*planner_hook								    = aqo_planner;*/
-  prev_post_parse_analyze_hook			= post_parse_analyze_hook;
+  /*prev_post_parse_analyze_hook			= post_parse_analyze_hook;*/
   post_parse_analyze_hook						= get_query_text;
   /*prev_ExecutorStart_hook						= ExecutorStart_hook;*/
 	/*ExecutorStart_hook							= aqo_ExecutorStart;*/
@@ -146,3 +146,37 @@ void debug_print(char *msg)
   }
 }
 
+void error_print(char *msg)
+{
+  FILE *fp = fopen("./errors.txt", "ab");
+  if (fp != NULL)
+  {
+    fputs(msg, fp);
+    fflush(fp);
+    fclose(fp);
+  }
+}
+
+void add_cardinality(char *table_names, double card)
+{
+  struct cardinality *c;
+  char *key;
+  c = malloc(sizeof(struct cardinality));
+  key = malloc(strlen(table_names)+1);
+  strcpy(key, table_names);
+  c->cardinality = card;
+  c->table_names = key;
+
+  HASH_ADD_KEYPTR(hh, query_context.cardinalities, c->table_names,
+      strlen(c->table_names), c);
+}
+
+void print_cardinalities() {
+  struct cardinality *s;
+  char debug_str[10000];
+  for (s = query_context.cardinalities; s != NULL; s=s->hh.next) {
+      sprintf(debug_str, "tables: %s, cardinality: %f\n",
+          s->table_names, s->cardinality);
+      debug_print(debug_str);
+  }
+}
