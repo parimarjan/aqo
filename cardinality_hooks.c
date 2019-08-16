@@ -122,7 +122,9 @@ double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
       char *buffer = malloc(MAX_TABLE_NAME_SIZE);
 			RangeTblEntry *rte=root->simple_rte_array[rti];
 			/*sprintf(buffer, "%d: %d, %s\n", i, rti, get_rel_name(rte->relid));*/
-      sprintf(buffer, "%s", get_rel_name(rte->relid));
+      // this would give the table name, we want alias name instead
+      /*sprintf(buffer, "%s", get_rel_name(rte->relid));*/
+      sprintf(buffer, "%s", rte->eref->aliasname);
       tables[num_tables] = buffer;
 			num_tables += 1;
 		}
@@ -149,7 +151,10 @@ double get_json_cardinality(PlannerInfo *root, RelOptInfo *rel)
     // zero makes postgres mad
     rows += 1.00;
   }
+  sprintf(debug_text, "rows: %lf\n", rows);
+  debug_print(debug_text);
   return rows;
+  /*return 10.0;*/
 }
 
 /*
@@ -272,6 +277,7 @@ aqo_set_joinrel_size_estimates(PlannerInfo *root, RelOptInfo *rel,
 							   List *restrictlist)
 {
   /*rel->rows = 50.0;*/
+  debug_print("set joinrel size\n");
   rel->rows = get_json_cardinality(root, rel);
 }
 
@@ -288,5 +294,6 @@ aqo_get_parameterized_joinrel_size(PlannerInfo *root,
 								   SpecialJoinInfo *sjinfo,
 								   List *restrict_clauses)
 {
+  debug_print("get parametrized joinrel size\n");
   return get_json_cardinality(root, rel);
 }
